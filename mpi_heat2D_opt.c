@@ -1,27 +1,10 @@
-/****************************************************************************
- * FILE: mpi_heat2D.c
- * DESCRIPTIONS:  
- *   HEAT2D Example - Parallelized C Version
- *   This example is based on a simplified two-dimensional heat 
- *   equation domain decomposition.  The initial temperature is computed to be 
- *   high in the middle of the domain and zero at the boundaries.  The 
- *   boundaries are held at zero throughout the simulation.  During the 
- *   time-stepping, an array containing two domains is used; these domains 
- *   alternate between old data and new data.
- *
- *   In this parallelized version, the grid is decomposed by the master
- *   process and then distributed by rows to the worker processes.  At each 
- *   time step, worker processes must exchange border data with neighbors, 
- *   because a grid point's current temperature depends upon it's previous
- *   time step value plus the values of the neighboring grid points.  Upon
- *   completion of all time steps, the worker processes return their results
- *   to the master process.
- *
- *   Two data files are produced: an initial data set and a final data set.
- * AUTHOR: Blaise Barney - adapted from D. Turner's serial C version. Converted
- *   to MPI: George L. Gusciora (1/95)
- * LAST REVISED: 04/02/05
- ****************************************************************************/
+/* =============================================
+ * Kostas Evangelou
+ * mpi_heat2D_opt.c
+ * Parallel Systems
+ * MPI Optimization of heat2D problem
+ * =============================================*/
+
 #include "mpi.h"
 #include <stdio.h>
 #include <stdlib.h>
