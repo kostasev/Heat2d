@@ -98,8 +98,53 @@ int main(int argc, char *argv[]) {
 
 
     for(step=0; step<=STEPS;steps++){
+        /* Send and Receive asynchronous the shared values of neighbor */
+        if (neighbors[UP] >= 0){
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + 1, sub_table_dimention, MPI_FLOAT, neighbors[UP], DTAG, cartcomm, &req[0]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + 1, sub_table_dimention, MPI_FLOAT, neighbors[UP], UTAG, cartcomm, &req[1]);
+        }
 
+        if (neighbors[DOWN] >= 0){
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_table_dimention*sub_y + 1, sub_table_dimention , MPI_FLOAT, neighbors[DOWN], UTAG, cartcomm, &req[2]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + (sub_table_dimention+1)*sub_y + 1, sub_table_dimention , MPI_FLOAT, neighbors[DOWN], DTAG, cartcomm, &req[3]);
+        }
 
+        if (neighbors[LEFT] >= 0){
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + 1, 1, COL_INT, neighbors[LEFT], RTAG, cartcomm,&req[4]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + sub_y, 1, COL_INT, neighbors[LEFT], LTAG, cartcomm, &req[5]);
+        }
+
+        if (neighbors[RIGHT] >= 0 ){
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + sub_table_dimention, 1, COL_INT, neighbors[RIGHT], LTAG, cartcomm,&req[6]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + sub_y + sub_table_dimention + 1, 1, COL_INT , neighbors[RIGHT], RTAG, cartcomm,&req[7]);
+        }
+
+        /* Update inside table while the process wait for neighbor values */
+        update_inside_table(sub_table_dimention - 2, table_u + iz*sub_x*sub_y, table_u + (1-iz)*sub_x*sub_y);
+
+        /* Wait for neighbor values */
+        if(neighbors[UP] >= 0){
+            MPI_Wait(&req[0],&status[0]);
+            MPI_Wait(&req[1],&status[1]);
+        }
+        if(neighbors[DOWN] >= 0){
+            MPI_Wait(&req[2],&status[2]);
+            MPI_Wait(&req[3],&status[3]);
+        }
+        if(neighbors[LEFT] >= 0){
+            MPI_Wait(&req[4],&status[4]);
+            MPI_Wait(&req[5],&status[5]);
+        }
+        if(neighbors[RIGHT] >= 0){
+            MPI_Wait(&req[6],&status[6]);
+            MPI_Wait(&req[7],&status[7]);
+        }
+
+        /* Update outside table with neighboor values */
+        update_outside_table(sub_table_dimention, table_u + iz*sub_x*sub_y, table_u + (1-iz)*sub_x*sub_y);
+
+        /* Next loop with have to deal with the other table */
+        iz = 1 - iz;
     }
 
 
