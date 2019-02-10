@@ -32,7 +32,7 @@ struct Parms {
 
 int main(int argc, char *argv[]) {
     void    inidat(), prtdat(), update_in(), update_out();
-    static float  u[2][NXPROB+2][NYPROB+2];                         /* array for grid */
+    float   ***u;                       /* array for grid */
     int     taskid,                     /* this task's unique id */
             numworkers,                 /* number of worker processes */
             numtasks,                   /* number of tasks */
@@ -85,7 +85,14 @@ int main(int argc, char *argv[]) {
 
     MPI_Request req[8];
 
-    static float u[2][sub_x][sub_y];
+    u=(float***)malloc(2 * sizeof(float**));
+    for(i=0;i<2;i++){
+      u[i] = (float**)malloc(sub_x * sizeof(float*));
+      for(j=0;j<sub_x;j++){
+        u[i][j] = (float*)malloc(sub_y*sizeof(float));
+      }
+    }
+    
     for (iz=0; iz<2; iz++)
         for (ix=0; ix<BLOCK_LENGTH+2; ix++)
             for (iy=0; iy<BLOCK_LENGTH+2; iy++)
