@@ -33,6 +33,7 @@ struct Parms {
 int main(int argc, char *argv[]) {
     void    inidat(), prtdat(), update_in(), update_out();
     float   ***u;                       /* array for grid */
+    float   *temp[2];                   /* temp 1d array for fast memory allocation */
     int     taskid,                     /* this task's unique id */
             numworkers,                 /* number of worker processes */
             numtasks,                   /* number of tasks */
@@ -78,6 +79,7 @@ int main(int argc, char *argv[]) {
     sub_x = sub_table_dim + 2;
     sub_y = sub_table_dim + 2;
 
+    /* Declare MPI Types */
     MPI_Type_contiguous(sub_x, MPI_FLOAT, &row);
     MPI_Type_commit(&MPI_row);
     MPI_Type_vector(sub_y, 1, sub_ x, MPI_FLOAT, &column);
@@ -85,24 +87,31 @@ int main(int argc, char *argv[]) {
 
     MPI_Request req[8];
 
+    /* Allocate Memory for Table */
     u=(float***)malloc(2 * sizeof(float**));
     for(i=0;i<2;i++){
       u[i] = (float**)malloc(sub_x * sizeof(float*));
+      temp[i] = (float*)malloc(sub_y*sub_x*sizeof(float));
       for(j=0;j<sub_x;j++){
-        u[i][j] = (float*)malloc(sub_y*sizeof(float));
+        u[i][j] = temp[i] + (j*sub_y);
       }
     }
-    
+
+    /* Init table with 0s */
     for (iz=0; iz<2; iz++)
-        for (ix=0; ix<BLOCK_LENGTH+2; ix++)
-            for (iy=0; iy<BLOCK_LENGTH+2; iy++)
+        for (ix=0; ix<sub_x; ix++)
+            for (iy=0; iy<sub_y; iy++)
                 u[iz][ix][iy] = 0.0;
 
-    inidat(sub_table_dim, sub_table_dim, u , taskid);
+    /* Set Random values to sub_table */
+    inidat(sub_x, sub_y, taskid, u[0]);
 
     MPI_Barrier(cart_comm);
     start_time = MPI_Wtime();
 
+#if (CONVERGENCE == 1)
+    task_convergence = reduced_convergence = 0;
+#endif
 
     for(step=0; step<=STEPS;steps++){
         /* Send and Receive asynchronous the shared values of neighbor */
@@ -152,6 +161,17 @@ int main(int argc, char *argv[]) {
 
         /* Next loop with have to deal with the other table */
         iz = 1 - iz;
+
+#if (CONVERGENCE == 1)
+        if (step % CONVERGENCE_n == 0) {
+            task_convergence = check_convergence(1, task_X - 2, 1, task_Y - 2, task_Y, *u[iz], *u[1 - iz]);
+            MPI_Barrier(MPI_COMM_CARTESIAN);
+            MPI_Allreduce(&task_convergence, &reduced_convergence, 1, MPI_INT, MPI_LAND, MPI_COMM_CARTESIAN);
+            if (reduced_convergence == 1) {
+                break;
+            }
+        }
+#endif
     }
     /* Stop timer, calculate duration, reduce */
     end_time = MPI_Wtime();
@@ -167,8 +187,8 @@ int main(int argc, char *argv[]) {
     /****************/
 
     /* Cleanup everything */
-    free(u0Data);
-    free(u1Data);
+    free(temp[0]);
+    free(temp[1]);
     free(u[0]);
     free(u[1]);
     free(u);
@@ -181,46 +201,49 @@ int main(int argc, char *argv[]) {
 /**************************************************************************
  *  subroutine update
  ****************************************************************************/
-void update(int start, int end, int ny, float *u1, float *u2) {
-    int ix, iy;
-    for (ix = start; ix <= end; ix++)
-        for (iy = 1; iy <= ny - 2; iy++)
-            *(u2 + ix * ny + iy) = *(u1 + ix * ny + iy) +
-                                   parms.cx * (*(u1 + (ix + 1) * ny + iy) +
-                                               *(u1 + (ix - 1) * ny + iy) -
-                                               2.0 * *(u1 + ix * ny + iy)) +
-                                   parms.cy * (*(u1 + ix * ny + iy + 1) +
-                                               *(u1 + ix * ny + iy - 1) -
-                                               2.0 * *(u1 + ix * ny + iy));
+void update_calculation(int ix, int iy, int y, float *u1, float *u2)
+{
+
+    *(u2 + ix * y + iy) = *(u1 + ix * y + iy) +
+        parms.cx * (*(u1 + (ix + 1) * y + iy) +
+        *(u1 + (ix - 1) * y + iy) -
+        2.0 * *(u1 + ix * y + iy)) +
+        parms.cy * (*(u1 + ix * y + iy + 1) +
+        *(u1 + ix * y + iy - 1) -
+        2.0 * *(u1 + ix * y + iy));
+
+}
+
+
+void update_inside_table(int end, float *u1, float *u2)
+{
+    int i, j;
+    for (i = 2; i <= end + 1; i++) {
+        for (j = 2; j <= end + 1; j++) {
+            update_calculation(i, j, end + 4, u1, u2);
+        }
+    }
+}
+
+
+void update_outside_table(int end, float *u1, float *u2)
+{
+    int i;
+    for (i = 1; i <= end; i++) {
+        update_calculation(1, i, end + 2, u1, u2);
+        update_calculation(end, i, end + 2, u1, u2);
+        update_calculation(i, 1, end + 2, u1, u2);
+        update_calculation(i, end, end + 2, u1, u2);
+    }
 }
 
 /*****************************************************************************
  *  subroutine inidat
  *****************************************************************************/
-void inidat(int nx, int ny, float *u,int id) {
-    int ix, iy;
-
-    for (ix = 0; ix <= nx - 1; ix++)
-        for (iy = 0; iy <= ny - 1; iy++)
-            *(u + ix * ny + iy) = (float) (ix * (nx - ix - 1) * iy * (ny - iy - 1))*(id + 3);
-}
-
-/**************************************************************************
- * subroutine prtdat
- **************************************************************************/
-void prtdat(int nx, int ny, float *u1, char *fnam) {
-    int ix, iy;
-    FILE *fp;
-
-    fp = fopen(fnam, "w");
-    for (iy = ny - 1; iy >= 0; iy--) {
-        for (ix = 0; ix <= nx - 1; ix++) {
-            fprintf(fp, "%6.1f", *(u1 + ix * ny + iy));
-            if (ix != nx - 1)
-                fprintf(fp, " ");
-            else
-                fprintf(fp, "\n");
-        }
-    }
-    fclose(fp);
+void inidat(int nx, int ny, int id, float **u) {
+int ix, iy;
+int r = rand()%10;
+for (ix = 0; ix <= nx-1; ix++) 
+  for (iy = 0; iy <= ny-1; iy++)
+     u[ix][iy] = (float)(ix * (nx - ix - 1) * iy * (ny - iy - 1))*(r+id);
 }
