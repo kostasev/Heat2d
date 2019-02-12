@@ -10,20 +10,20 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define NXPROB      20                 /* x dimension of problem grid */
-#define NYPROB      20                 /* y dimension of problem grid */
-#define STEPS       100                /* number of time steps */
-#define DTAG        0                  /* message tag */
-#define UTAG        1                  /* message tag */
-#define LTAG        2                  /* message tag */
-#define RTAG        3                  /* message tag */
-#define NONE       -1                  /* indicates no neighbor */
-#define DONE        4                  /* message tag */
-#define MASTER      0                  /* taskid of first process */
-#define UP          0
-#define DOWN        1
-#define LEFT        2
-#define RIGHT       3
+#define  NX_PROB     20                 /* x dimension of problem grid */
+#define  NY_PROB     20                 /* y dimension of problem grid */
+#define  STEPS_I     100                /* number of time steps */
+#define  DTAG        0                  /* message tag */
+#define  UTAG        1                  /* message tag */
+#define  LTAG        2                  /* message tag */
+#define  RTAG        3                  /* message tag */
+#define  NONE       -1                  /* indicates no neighbor */
+#define  DONE        4                  /* message tag */
+#define  MASTER      0                  /* taskid of first process */
+#define  UP          0
+#define  DOWN        1
+#define  LEFT        2
+#define  RIGHT       3
 
 struct Parms {
     float cx;
@@ -42,14 +42,21 @@ int main(int argc, char *argv[]) {
             left, right,                /* neighbor tasks */
             msgtype,                    /* for message types */
             rc, start, end,             /* misc */
-            i, ix, iy, iz, it,          /* loop variables */
-            dims[2];                    /* cart argument*/
+            i, j, ix, iy, iz, it,          /* loop variables */
+            dims[2],                    /* cart argument*/
             reorder = 1,                /* Ranking may be reordered (true) or not (false) (logical) */
-            periods[2] = {0, 0}         /* Logical  array of size ndims specifying whether the grid is periodic */
-            neighbors[4];               /* Neighbors indicator */
+            periods[2] = {0, 0},        /* Logical  array of size ndims specifying whether the grid is periodic */
+            neighbors[4],               /* Neighbors indicator */
+            size,                       /* Calculate num of grid */
+            sub_y,sub_x,
+            sub_table_dim,
+            step;
     MPI_Status status;
     double start_time = 0.0,
             end_time = 0.0;
+
+    MPI_Datatype MPI_row,
+                 MPI_column;
 
 /* First, find out my taskid and how many tasks are running */
     MPI_Init(&argc, &argv);
@@ -57,8 +64,8 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
     numworkers = numtasks;
 
-    if ((NYPROB * NXPROB) % numworkers != 0) {
-        printf("ERROR: Number of tasks must have remainder 0 when divided with %d x %d \n", NXPROB, NYPROB);
+    if ((NY_PROB * NX_PROB) % numworkers != 0) {
+        printf("ERROR: Number of tasks must have remainder 0 when divided with %d x %d \n", NX_PROB, NY_PROB);
         MPI_Abort(MPI_COMM_WORLD, rc);
         exit(1);
     }
@@ -71,18 +78,18 @@ int main(int argc, char *argv[]) {
     dims[1] = size;
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cart_comm);
 
-    MPI_Barrier(cartcomm);
-    MPI_Cart_shift(cartcomm, 0, 1, &neighbors[UP], &neighbors[DOWN]);
-    MPI_Cart_shift(cartcomm, 1, 1, &neighbors[LEFT], &neighbors[RIGHT]);
+    MPI_Barrier(cart_comm);
+    MPI_Cart_shift(cart_comm, 0, 1, &neighbors[UP], &neighbors[DOWN]);
+    MPI_Cart_shift(cart_comm, 1, 1, &neighbors[LEFT], &neighbors[RIGHT]);
 
-    sub_table_dim = sqrt(NXPROB*NYPROB/numtasks);
+    sub_table_dim = sqrt(NX_PROB*NY_PROB/numtasks);
     sub_x = sub_table_dim + 2;
     sub_y = sub_table_dim + 2;
 
     /* Declare MPI Types */
-    MPI_Type_contiguous(sub_x, MPI_FLOAT, &row);
+    MPI_Type_contiguous(sub_x, MPI_FLOAT, &MPI_row);
     MPI_Type_commit(&MPI_row);
-    MPI_Type_vector(sub_y, 1, sub_ x, MPI_FLOAT, &column);
+    MPI_Type_vector(sub_y, 1, sub_x, MPI_FLOAT, &MPI_column);
     MPI_Type_commit(&MPI_column);
 
     MPI_Request req[8];
@@ -113,30 +120,30 @@ int main(int argc, char *argv[]) {
     task_convergence = reduced_convergence = 0;
 #endif
 
-    for(step=0; step<=STEPS;steps++){
+    for(step=0; step<=STEPS;step++){
         /* Send and Receive asynchronous the shared values of neighbor */
         if (neighbors[UP] >= 0){
-            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + 1, sub_table_dimention, MPI_FLOAT, neighbors[UP], DTAG, cartcomm, &req[0]);
-            MPI_Irecv(table_u + iz*sub_x*sub_y + 1, sub_table_dimention, MPI_FLOAT, neighbors[UP], UTAG, cartcomm, &req[1]);
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + 1, sub_table_dim, MPI_FLOAT, neighbors[UP], DTAG, cart_comm, &req[0]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + 1, sub_table_dim, MPI_FLOAT, neighbors[UP], UTAG, cart_comm, &req[1]);
         }
 
         if (neighbors[DOWN] >= 0){
-            MPI_Isend(table_u + iz*sub_x*sub_y + sub_table_dimention*sub_y + 1, sub_table_dimention , MPI_FLOAT, neighbors[DOWN], UTAG, cartcomm, &req[2]);
-            MPI_Irecv(table_u + iz*sub_x*sub_y + (sub_table_dimention+1)*sub_y + 1, sub_table_dimention , MPI_FLOAT, neighbors[DOWN], DTAG, cartcomm, &req[3]);
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_table_dim*sub_y + 1, sub_table_dim , MPI_FLOAT, neighbors[DOWN], UTAG, cart_comm, &req[2]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + (sub_table_dim+1)*sub_y + 1, sub_table_dim , MPI_FLOAT, neighbors[DOWN], DTAG, cart_comm, &req[3]);
         }
 
         if (neighbors[LEFT] >= 0){
-            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + 1, 1, COL_INT, neighbors[LEFT], RTAG, cartcomm,&req[4]);
-            MPI_Irecv(table_u + iz*sub_x*sub_y + sub_y, 1, COL_INT, neighbors[LEFT], LTAG, cartcomm, &req[5]);
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + 1, 1, COL_INT, neighbors[LEFT], RTAG, cart_comm,&req[4]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + sub_y, 1, COL_INT, neighbors[LEFT], LTAG, cart_comm, &req[5]);
         }
 
         if (neighbors[RIGHT] >= 0 ){
-            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + sub_table_dimention, 1, COL_INT, neighbors[RIGHT], LTAG, cartcomm,&req[6]);
-            MPI_Irecv(table_u + iz*sub_x*sub_y + sub_y + sub_table_dimention + 1, 1, COL_INT , neighbors[RIGHT], RTAG, cartcomm,&req[7]);
+            MPI_Isend(table_u + iz*sub_x*sub_y + sub_y + sub_table_dim, 1, COL_INT, neighbors[RIGHT], LTAG, cart_comm,&req[6]);
+            MPI_Irecv(table_u + iz*sub_x*sub_y + sub_y + sub_table_dim + 1, 1, COL_INT , neighbors[RIGHT], RTAG, cart_comm,&req[7]);
         }
 
         /* Update inside table while the process wait for neighbor values */
-        update_inside_table(sub_table_dimention - 2, table_u + iz*sub_x*sub_y, table_u + (1-iz)*sub_x*sub_y);
+        update_inside_table(sub_table_dim, table_u + iz*sub_x*sub_y, table_u + (1-iz)*sub_x*sub_y);
 
         /* Wait for neighbor values */
         if(neighbors[UP] >= 0){
@@ -157,7 +164,7 @@ int main(int argc, char *argv[]) {
         }
 
         /* Update outside table with neighboor values */
-        update_outside_table(sub_table_dimention, table_u + iz*sub_x*sub_y, table_u + (1-iz)*sub_x*sub_y);
+        update_outside_table(sub_table_dim, table_u + iz*sub_x*sub_y, table_u + (1-iz)*sub_x*sub_y);
 
         /* Next loop with have to deal with the other table */
         iz = 1 - iz;
@@ -180,7 +187,7 @@ int main(int argc, char *argv[]) {
     MPI_Reduce(&task_time, &reduced_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_CARTESIAN);
     if (rank == 0) {
         printf("Convergence: %d\n", CONVERGENCE);
-        printf("u size: [%d][%d]\n", NXPROB, NYPROB);
+        printf("u size: [%d][%d]\n", NX_PROB, NY_PROB);
         printf("tasks: %d\n", number_of_tasks);
         printf("Time elapsed: %f seconds\n", reduced_time);
     }
@@ -201,40 +208,18 @@ int main(int argc, char *argv[]) {
 /**************************************************************************
  *  subroutine update
  ****************************************************************************/
-void update_calculation(int ix, int iy, int y, float *u1, float *u2)
+void update ( int start_x, int end_x,int start_y, int end_y,int ny, float *u1, float *u2 )
 {
-
-    *(u2 + ix * y + iy) = *(u1 + ix * y + iy) +
-        parms.cx * (*(u1 + (ix + 1) * y + iy) +
-        *(u1 + (ix - 1) * y + iy) -
-        2.0 * *(u1 + ix * y + iy)) +
-        parms.cy * (*(u1 + ix * y + iy + 1) +
-        *(u1 + ix * y + iy - 1) -
-        2.0 * *(u1 + ix * y + iy));
-
-}
-
-
-void update_inside_table(int end, float *u1, float *u2)
-{
-    int i, j;
-    for (i = 2; i <= end + 1; i++) {
-        for (j = 2; j <= end + 1; j++) {
-            update_calculation(i, j, end + 4, u1, u2);
-        }
-    }
-}
-
-
-void update_outside_table(int end, float *u1, float *u2)
-{
-    int i;
-    for (i = 1; i <= end; i++) {
-        update_calculation(1, i, end + 2, u1, u2);
-        update_calculation(end, i, end + 2, u1, u2);
-        update_calculation(i, 1, end + 2, u1, u2);
-        update_calculation(i, end, end + 2, u1, u2);
-    }
+    int ix, iy;
+    for ( ix = start_x; ix <= end_x; ix++ )
+        for ( iy = start_y; iy <= end_y; iy++ )
+            * ( u2+ix*ny+iy ) = * ( u1+ix*ny+iy )  +
+                                parms.cx * ( * ( u1+ ( ix+1 ) *ny+iy ) +
+                                             * ( u1+ ( ix-1 ) *ny+iy ) -
+                                             2.0 * * ( u1+ix*ny+iy ) ) +
+                                parms.cy * ( * ( u1+ix*ny+iy+1 ) +
+                                             * ( u1+ix*ny+iy-1 ) -
+                                             2.0 * * ( u1+ix*ny+iy ) );
 }
 
 /*****************************************************************************
