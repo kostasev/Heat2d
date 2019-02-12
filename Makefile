@@ -8,7 +8,7 @@ SOURCE = mpi_heat2D_opt.c
 all: heat_mpi
 
 heat_mpi: $(SOURCE)
-	$(MPICC) -DNYPROB=$(SIZE) -DSTEPS=$(STEPS) $(FLAGS) $? -o $@
+	$(MPICC) $(FLAGS) -o heat_mpi $(SOURCE) -lm
 
 clean:
 	rm -f $(BINS)
