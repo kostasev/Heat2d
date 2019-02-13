@@ -36,17 +36,12 @@ int main(int argc, char *argv[]) {
     float   ***u;                       /* array for grid */
     float   *temp[2];                   /* temp 1d array for fast memory allocation */
     int     taskid,                     /* this task's unique id */
-            numworkers,                 /* number of worker processes */
-            numtasks,                   /* number of tasks */
-            averow, rows, offset, extra,/* for sending rows of data */
-            dest, source,               /* to - from for message send-receive */
-            left, right,                /* neighbor tasks */
-            msgtype,                    /* for message types */
-            rc=0, start, end,             /* misc */
-            i, j, ix, iy, iz,          /* loop variables */
+            numtasks,                   /* number of worker processes */
+            rc=0,                       /* misc */
+            i, j, ix, iy, iz,           /* loop variables */
             dims[2],                    /* cart argument*/
-            reorder = 1,                /* Ranking may be reordered (true) or not (false) (logical) */
-            periods[2] = {0, 0},        /* Logical  array of size ndims specifying whether the grid is periodic */
+            reorder = 0,                /* Ranking may be reordered (true) or not (false) (logical) */
+            periods[2],                 /* Logical  array of size ndims specifying whether the grid is periodic */
             neighbors[4],               /* Neighbors indicator */
             size,                       /* Calculate num of grid */
             sub_y,sub_x,
@@ -65,10 +60,9 @@ int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
     MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
-    numworkers = numtasks;
 
-    if ((NYPROB * NXPROB) % numworkers != 0) {
-        printf("ERROR: Number of tasks must have remainder 0 when divided with %d x %d \n", NXPROB, NYPROB);
+    if ((NYPROB * NXPROB) % numtasks != 0) {
+        printf("ERROR: Number of tasks must have remainder 0 when divided with number of workers %d x %d / %d \n", NXPROB, NYPROB, numtasks);
         MPI_Abort(MPI_COMM_WORLD, rc);
         exit(1);
     }
@@ -76,15 +70,25 @@ int main(int argc, char *argv[]) {
     /* Mpi Cartesian Grid */
 
     MPI_Comm cart_comm;
-    size = sqrt(numworkers);
+    size = sqrt(numtasks);
     dims[0] = size;
     dims[1] = size;
+    periods[0]=periods[1]=0;
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &cart_comm);
 
     MPI_Barrier(cart_comm);
     MPI_Cart_shift(cart_comm, 0, 1, &neighbors[UP], &neighbors[DOWN]);
     MPI_Cart_shift(cart_comm, 1, 1, &neighbors[LEFT], &neighbors[RIGHT]);
 
+    if (taskid==0){
+        printf ("Up:    %d\n",neighbors[UP]);
+        printf ("Down:  %d\n",neighbors[DOWN]);
+        printf ("Left:  %d\n",neighbors[LEFT]);
+        printf ("Right: %d\n",neighbors[RIGHT]);
+    }
+    sleep(10);
+    //MPI_Abort(MPI_COMM_WORLD, rc);
+    //exit(1);
     sub_table_dim = sqrt(NXPROB*NYPROB/numtasks);
     sub_x = sub_table_dim + 2;
     sub_y = sub_table_dim + 2;
@@ -136,13 +140,13 @@ int main(int argc, char *argv[]) {
         }
 
         if (neighbors[LEFT] >= 0){
-            MPI_Isend(u + iz*sub_x*sub_y + sub_y + 1, 1, 44, neighbors[LEFT], RTAG, cart_comm,&req[4]);
-            MPI_Irecv(u + iz*sub_x*sub_y + sub_y, 1, 44, neighbors[LEFT], LTAG, cart_comm, &req[5]);
+            MPI_Isend(u + iz*sub_x*sub_y + sub_y + 1, 1, MPI_column, neighbors[LEFT], RTAG, cart_comm,&req[4]);
+            MPI_Irecv(u + iz*sub_x*sub_y + sub_y, 1, MPI_column, neighbors[LEFT], LTAG, cart_comm, &req[5]);
         }
 
         if (neighbors[RIGHT] >= 0 ){
-            MPI_Isend(u + iz*sub_x*sub_y + sub_y + sub_table_dim, 1, 44, neighbors[RIGHT], LTAG, cart_comm,&req[6]);
-            MPI_Irecv(u + iz*sub_x*sub_y + sub_y + sub_table_dim + 1, 1, 44 , neighbors[RIGHT], RTAG, cart_comm,&req[7]);
+            MPI_Isend(u + iz*sub_x*sub_y + sub_y + sub_table_dim, 1, MPI_column, neighbors[RIGHT], LTAG, cart_comm,&req[6]);
+            MPI_Irecv(u + iz*sub_x*sub_y + sub_y + sub_table_dim + 1, 1, MPI_column , neighbors[RIGHT], RTAG, cart_comm,&req[7]);
         }
 
         /* Update inside table while the process wait for neighbor values */
