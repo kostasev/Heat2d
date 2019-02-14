@@ -14,8 +14,8 @@
 #define  NXPROB     20                 /* x dimension of problem grid */
 #define  NYPROB     20                 /* y dimension of problem grid */
 #define  STEPS     100                 /* number of time steps */
-#define  DTAG        0                 /* message tag */
-#define  UTAG        1                 /* message tag */
+#define  UTAG        0                 /* message tag */
+#define  DTAG        1                 /* message tag */
 #define  LTAG        2                 /* message tag */
 #define  RTAG        3                 /* message tag */
 #define  NONE       -1                 /* indicates no neighbor */
@@ -119,6 +119,8 @@ int main(int argc, char *argv[]) {
 #if (CONVERGENCE == 1)
     task_convergence = reduced_convergence = 0;
 #endif
+
+    iz = 0;
     for(step=0; step<=STEPS;step++){
         /* Send and Receive asynchronous the shared values of neighbor */
         if (neighbors[UP] >= 0){
