@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
         }
 
         /* Update inside table while the process wait for neighbor values */
-        //update(sub_table_dim, u + iz*sub_x*sub_y, u + (1-iz)*sub_x*sub_y);
+        update ( 2, sub_x-3,2,sub_y-3,sub_table_dim+2, &u[iz][0][0],&u[iz-1][0][0] );
 
         /* Wait for neighbor values */
         if(neighbors[UP] >= 0){
@@ -165,7 +165,10 @@ int main(int argc, char *argv[]) {
         }
 
         /* Update outside table with neighboor values */
-        //update(sub_table_dim, u + iz*sub_x*sub_y, u + (1-iz)*sub_x*sub_y);
+        update ( start_x+1,end_x-1,start_y,start_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( start_x+1,end_x-1,end_y,end_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( start_x,start_x,start_y,end_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( end_x,end_x,start_y,end_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
 
         /* Next loop with have to deal with the other table */
         iz = 1 - iz;
