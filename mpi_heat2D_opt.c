@@ -142,33 +142,44 @@ int main(int argc, char *argv[]) {
             MPI_Isend(&u[iz][0][sub_y-2], 1, MPI_column, neighbors[RIGHT], LTAG, cart_comm,&send[3]);
             MPI_Irecv(&u[iz][0][sub_y-1], 1, MPI_column , neighbors[RIGHT], RTAG, cart_comm,&receive[3]);
         }
-
+        if(taskid==0){
+            printf("EIMAI AKOMA EDW\n");
+        }
         /* Update inside table while the process wait for neighbor values */
         update ( 2, sub_x-3,2,sub_y-3,sub_table_dim+2, &u[iz][0][0],&u[iz-1][0][0] );
-
+        
         /* Wait for neighbor values */
         if(neighbors[UP] >= 0){
-            MPI_Wait(&send[0],MPI_STATUS_IGNORE);
             MPI_Wait(&receive[0],MPI_STATUS_IGNORE);
         }
         if(neighbors[DOWN] >= 0){
-            MPI_Wait(&send[1],MPI_STATUS_IGNORE);
             MPI_Wait(&receive[1],MPI_STATUS_IGNORE);
         }
         if(neighbors[LEFT] >= 0){
-            MPI_Wait(&send[2],MPI_STATUS_IGNORE);
             MPI_Wait(&receive[2],MPI_STATUS_IGNORE);
         }
         if(neighbors[RIGHT] >= 0){
-            MPI_Wait(&send[3],MPI_STATUS_IGNORE);
             MPI_Wait(&receive[3],MPI_STATUS_IGNORE);
         }
 
         /* Update outside table with neighboor values */
-        update ( start_x+1,end_x-1,start_y,start_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
-        update ( start_x+1,end_x-1,end_y,end_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
-        update ( start_x,start_x,start_y,end_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
-        update ( end_x,end_x,start_y,end_y,BLOCK_LENGTH+2,&u[iz][0][0],&u[1-iz][0][0] );
+        //update ( 1,sub_x-2,1,1,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        //update ( 1,sub_x-2,sub_y-2,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        //update ( 1,1,1,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        //update ( sub_x-2,sub_x-2,1,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+
+        if(neighbors[UP] >= 0){
+            MPI_Wait(&send[0],MPI_STATUS_IGNORE);
+        }
+        if(neighbors[DOWN] >= 0){
+            MPI_Wait(&send[1],MPI_STATUS_IGNORE);
+        }
+        if(neighbors[LEFT] >= 0){
+            MPI_Wait(&send[2],MPI_STATUS_IGNORE);
+        }
+        if(neighbors[RIGHT] >= 0){
+            MPI_Wait(&send[3],MPI_STATUS_IGNORE);
+        }
 
         /* Next loop with have to deal with the other table */
         iz = 1 - iz;
