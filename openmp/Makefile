@@ -1,5 +1,5 @@
 MPICC = mpicc
-FLAGS = -Wall
+FLAGS = -Wall 
 THREADS=4
 SIZE=900
 STEPS=10000
@@ -9,7 +9,7 @@ BINS = heat2d
 all: heat2d
 
 heat2d: $(SOURCE)
-	$(MPICC) $(FLAGS) -o heat2d $(SOURCE) -lm
+	$(MPICC) $(FLAGS) -fopenmp -o heat2d $(SOURCE) -lm
 
 clean:
 	rm -f $(BINS)

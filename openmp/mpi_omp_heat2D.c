@@ -1,21 +1,22 @@
 /* =============================================
  * Kostas Evangelou
- * mpi_heat2D_opt.c
+ * mpi_omp_heat2D.c
  * Parallel Systems
- * MPI Optimization of heat2D problem
+ * MPI + OpenMP Optimization of heat2D problem
  * =============================================*/
 
 #include "mpi.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <omp.h>
 
 #define  CONVERGENCE   1                 /* Enable Convergence */ 
 #define  CONVERGENCE_N 5                 /* Convergence Check per N steps */
 #define  SENSITIVITY   1                 /* Sensitivity for convergence check */
 #define  NXPROB        80                /* x dimension of problem grid */
 #define  NYPROB        64                /* y dimension of problem grid */
-#define  STEPS         50000              /* number of time steps */
+#define  STEPS         500               /* number of time steps */
 #define  UTAG          0                 /* message tag */
 #define  DTAG          1                 /* message tag */
 #define  LTAG          2                 /* message tag */
@@ -224,7 +225,9 @@ int main(int argc, char *argv[]) {
 void update ( int start_x, int end_x,int start_y, int end_y,int ny, float *u1, float *u2 )
 {
     int ix, iy;
+    #pragma parallel omp for schedule(dynamic,1)
     for ( ix = start_x; ix <= end_x; ix++ )
+        #pragma parallel omp for schedule(dynamic,1)
         for ( iy = start_y; iy <= end_y; iy++ )
             * ( u2+ix*ny+iy ) = * ( u1+ix*ny+iy )  +
                                 parms.cx * ( * ( u1+ ( ix+1 ) *ny+iy ) +
