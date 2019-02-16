@@ -10,11 +10,12 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define  CONVERGENCE   0                 /* Enable Convergence */ 
-#define  CONVERGENCE_N 10                /* Convergence Check per N steps */
+#define  CONVERGENCE   1                 /* Enable Convergence */ 
+#define  CONVERGENCE_N 5                 /* Convergence Check per N steps */
+#define  SENSITIVITY   1                 /* Sensitivity for convergence check */
 #define  NXPROB        80                /* x dimension of problem grid */
 #define  NYPROB        64                /* y dimension of problem grid */
-#define  STEPS         500               /* number of time steps */
+#define  STEPS         50000              /* number of time steps */
 #define  UTAG          0                 /* message tag */
 #define  DTAG          1                 /* message tag */
 #define  LTAG          2                 /* message tag */
@@ -31,6 +32,8 @@ struct Parms {
     float cx;
     float cy;
 } parms = {0.1, 0.1};
+
+int convergence(int x, int y, float ***u,float sns);
 
 int main(int argc, char *argv[]) {
     void    inidat0(), inidat(), prtdat(), update();
@@ -113,7 +116,8 @@ int main(int argc, char *argv[]) {
     start_time = MPI_Wtime();
 
 #if (CONVERGENCE == 1)
-    float task_convergence = reduced_convergence = 0;
+    int task_convergence = 0;
+    int reduced_convergence = 0;
 #endif
 
     iz = 0;
@@ -179,7 +183,7 @@ int main(int argc, char *argv[]) {
 
 #if (CONVERGENCE == 1)
         if (step % CONVERGENCE_N == 0) {
-            task_convergence = check_convergence(1, task_X - 2, 1, task_Y - 2, task_Y, *u[iz], *u[1 - iz]);
+            task_convergence = convergence(sub_x-2, sub_y-2, u, SENSITIVITY);
             MPI_Barrier(cart_comm);
             MPI_Allreduce(&task_convergence, &reduced_convergence, 1, MPI_INT, MPI_LAND, cart_comm);
             if (reduced_convergence == 1) {
@@ -195,6 +199,7 @@ int main(int argc, char *argv[]) {
     MPI_Reduce(&task_time, &reduced_time, 1, MPI_DOUBLE, MPI_MAX, 0, cart_comm);
     if (taskid == 0) {
         printf("Convergence: %d\n", CONVERGENCE);
+        printf("Steps: %d\n", step);
         printf("u size: [%d][%d]\n", NXPROB, NYPROB);
         printf("tasks: %d\n", numtasks);
         printf("Time elapsed: %f seconds\n", reduced_time);
@@ -241,11 +246,28 @@ for (ix = 0; ix <= nx-1; ix++)
      u[ix][iy] = (float)(ix * (nx - ix - 1) * iy * (ny - iy - 1))*(r+id);
 }
 
-
+/*****************************************************************************
+ *  subroutine inidat0
+ *****************************************************************************/
 void inidat0(int sub_x, int sub_y, float ***u) {
 int iz, ix, iy;
 for (iz=0; iz<2; iz++)
         for (ix=0; ix<sub_x; ix++)
             for (iy=0; iy<sub_y; iy++)
                 u[iz][ix][iy] = 0.0;
+}
+
+/*****************************************************************************
+ *  subroutine convergence
+ *****************************************************************************/
+int convergence(int x, int y, float ***u,float sns){
+    int ix,iy;
+    for (ix=1;ix<x;ix++){
+        for (iy=1;iy<y;iy++){                          
+            if ( abs( u[0][ix][iy] - u[1][ix][iy] ) > sns){
+                return 0;
+            }
+        }
+    }
+    return 1;
 }
