@@ -10,21 +10,22 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define  CONVERGENCE 0                 /* Enable Convergence */ 
-#define  NXPROB     20                 /* x dimension of problem grid */
-#define  NYPROB     20                 /* y dimension of problem grid */
-#define  STEPS     100                 /* number of time steps */
-#define  UTAG        0                 /* message tag */
-#define  DTAG        1                 /* message tag */
-#define  LTAG        2                 /* message tag */
-#define  RTAG        3                 /* message tag */
-#define  NONE       -1                 /* indicates no neighbor */
-#define  DONE        4                 /* message tag */
-#define  MASTER      0                 /* taskid of first process */
-#define  UP          0
-#define  DOWN        1
-#define  LEFT        2
-#define  RIGHT       3
+#define  CONVERGENCE   0                 /* Enable Convergence */ 
+#define  CONVERGENCE_N 10                /* Convergence Check per N steps */
+#define  NXPROB        80                /* x dimension of problem grid */
+#define  NYPROB        64                /* y dimension of problem grid */
+#define  STEPS         500               /* number of time steps */
+#define  UTAG          0                 /* message tag */
+#define  DTAG          1                 /* message tag */
+#define  LTAG          2                 /* message tag */
+#define  RTAG          3                 /* message tag */
+#define  NONE         -1                 /* indicates no neighbor */
+#define  DONE          4                 /* message tag */
+#define  MASTER        0                 /* taskid of first process */
+#define  UP            0
+#define  DOWN          1
+#define  LEFT          2
+#define  RIGHT         3
 
 struct Parms {
     float cx;
@@ -32,13 +33,13 @@ struct Parms {
 } parms = {0.1, 0.1};
 
 int main(int argc, char *argv[]) {
-    void    inidat(), prtdat(), update();
+    void    inidat0(), inidat(), prtdat(), update();
     float   ***u;                       /* array for grid */
     float   *temp[2];                   /* temp 1d array for fast memory allocation */
     int     taskid,                     /* this task's unique id */
             numtasks,                   /* number of worker processes */
             rc=0,                       /* misc */
-            i, j, ix, iy, iz,           /* loop variables */
+            i, j, iz,                   /* loop variables */
             dims[2],                    /* cart argument*/
             reorder = 0,                /* Ranking may be reordered (true) or not (false) (logical) */
             periods[2],                 /* Logical  array of size ndims specifying whether the grid is periodic */
@@ -55,7 +56,7 @@ int main(int argc, char *argv[]) {
     MPI_Datatype MPI_row,
                  MPI_column;
 
-/* First, find out my taskid and how many tasks are running */
+/* Task Id and rank*/
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
     MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
@@ -79,8 +80,6 @@ int main(int argc, char *argv[]) {
     MPI_Cart_shift(cart_comm, 0, 1, &neighbors[UP], &neighbors[DOWN]);
     MPI_Cart_shift(cart_comm, 1, 1, &neighbors[LEFT], &neighbors[RIGHT]);
 
-    //MPI_Abort(MPI_COMM_WORLD, rc);
-    //exit(1);
     sub_table_dim = sqrt(NXPROB*NYPROB/numtasks);
     sub_x = sub_table_dim + 2;
     sub_y = sub_table_dim + 2;
@@ -105,10 +104,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Init table with 0s */
-    for (iz=0; iz<2; iz++)
-        for (ix=0; ix<sub_x; ix++)
-            for (iy=0; iy<sub_y; iy++)
-                u[iz][ix][iy] = 0.0;
+    inidat0(sub_x,sub_y,u);
 
     /* Set Random values to sub_table */
     inidat(sub_x, sub_y, taskid, u[0]);
@@ -117,7 +113,7 @@ int main(int argc, char *argv[]) {
     start_time = MPI_Wtime();
 
 #if (CONVERGENCE == 1)
-    task_convergence = reduced_convergence = 0;
+    float task_convergence = reduced_convergence = 0;
 #endif
 
     iz = 0;
@@ -142,11 +138,8 @@ int main(int argc, char *argv[]) {
             MPI_Isend(&u[iz][0][sub_y-2], 1, MPI_column, neighbors[RIGHT], LTAG, cart_comm,&send[3]);
             MPI_Irecv(&u[iz][0][sub_y-1], 1, MPI_column , neighbors[RIGHT], RTAG, cart_comm,&receive[3]);
         }
-        if(taskid==0){
-            printf("EIMAI AKOMA EDW\n");
-        }
         /* Update inside table while the process wait for neighbor values */
-        update ( 2, sub_x-3,2,sub_y-3,sub_table_dim+2, &u[iz][0][0],&u[iz-1][0][0] );
+        update ( 2, sub_x-3,2,sub_y-3,sub_table_dim+2, &u[iz][0][0],&u[1-iz][0][0] );
         
         /* Wait for neighbor values */
         if(neighbors[UP] >= 0){
@@ -163,10 +156,10 @@ int main(int argc, char *argv[]) {
         }
 
         /* Update outside table with neighboor values */
-        //update ( 1,sub_x-2,1,1,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
-        //update ( 1,sub_x-2,sub_y-2,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
-        //update ( 1,1,1,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
-        //update ( sub_x-2,sub_x-2,1,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( 1,sub_x-2,1,1,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( 1,sub_x-2,sub_y-2,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( 1,1,1,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
+        update ( sub_x-2,sub_x-2,1,sub_y-2,sub_table_dim+2,&u[iz][0][0],&u[1-iz][0][0] );
 
         if(neighbors[UP] >= 0){
             MPI_Wait(&send[0],MPI_STATUS_IGNORE);
@@ -185,7 +178,7 @@ int main(int argc, char *argv[]) {
         iz = 1 - iz;
 
 #if (CONVERGENCE == 1)
-        if (step % CONVERGENCE_n == 0) {
+        if (step % CONVERGENCE_N == 0) {
             task_convergence = check_convergence(1, task_X - 2, 1, task_Y - 2, task_Y, *u[iz], *u[1 - iz]);
             MPI_Barrier(cart_comm);
             MPI_Allreduce(&task_convergence, &reduced_convergence, 1, MPI_INT, MPI_LAND, cart_comm);
@@ -246,4 +239,13 @@ int r = rand()%10;
 for (ix = 0; ix <= nx-1; ix++) 
   for (iy = 0; iy <= ny-1; iy++)
      u[ix][iy] = (float)(ix * (nx - ix - 1) * iy * (ny - iy - 1))*(r+id);
+}
+
+
+void inidat0(int sub_x, int sub_y, float ***u) {
+int iz, ix, iy;
+for (iz=0; iz<2; iz++)
+        for (ix=0; ix<sub_x; ix++)
+            for (iy=0; iy<sub_y; iy++)
+                u[iz][ix][iy] = 0.0;
 }
