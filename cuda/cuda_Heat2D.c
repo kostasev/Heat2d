@@ -8,11 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
-
-__global__ void posibol(void){
-
-}
+#include "cuda_funcs.h"
 
 int main(int argc, char *argv[]) {
 	printf("Hello World\n");
