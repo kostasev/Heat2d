@@ -8,9 +8,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "cuda_funcs.h"
+#include "funcs.h"
 
 int main(int argc, char *argv[]) {
 	printf("Hello World\n");
+
+	convolute();
+
 	return 0;
 }
