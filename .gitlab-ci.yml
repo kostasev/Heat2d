@@ -1,0 +1,11 @@
+stages:          # List of stages for jobs, and their order of execution
+  - build
+
+
+build:      # This job runs in the deploy stage.
+  stage: build  # It only runs when *both* jobs in the test stage complete successfully.
+  environment: production
+  tags:
+    - gitlab-test-1
+  script:
+    - while true; do sleep 2; done
