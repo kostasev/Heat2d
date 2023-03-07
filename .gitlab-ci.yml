@@ -6,6 +6,6 @@ build:      # This job runs in the deploy stage.
   stage: build  # It only runs when *both* jobs in the test stage complete successfully.
   environment: production
   tags:
-    - gitlab-test-1
+    - gitlab-test-2
   script:
     - while true; do sleep 2; done
