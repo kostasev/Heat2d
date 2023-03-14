@@ -4,20 +4,7 @@ stages:          # List of stages for jobs, and their order of execution
 
 build1:      # This job runs in the deploy stage.
   stage: build  # It only runs when *both* jobs in the test stage complete successfully.
-  tags:
-    - gitlab-test-1
-  script:
-    - while true; do sleep 2; done
-  
-build2:      # This job runs in the deploy stage.
-  stage: build  # It only runs when *both* jobs in the test stage complete successfully.
-  tags:
-    - gitlab-test-1
-  script:
-    - while true; do sleep 2; done
-
-build3:      # This job runs in the deploy stage.
-  stage: build  # It only runs when *both* jobs in the test stage complete successfully.
+  parallel: 5
   tags:
     - gitlab-test-1
   script:
