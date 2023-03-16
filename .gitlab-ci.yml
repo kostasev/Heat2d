@@ -1,9 +1,10 @@
 default:
-  image: ubuntu:latest
+  image: gitlab-registry.cern.ch/ci-tools/docker-image-builder
 
 
 stages:          # List of stages for jobs, and their order of execution
   - build
+
 
 
 build1:      # This job runs in the deploy stage.
@@ -12,4 +13,5 @@ build1:      # This job runs in the deploy stage.
   tags:
     - gitlab-test-1
   script:
-    - while true; do sleep 2; done
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile 
+
